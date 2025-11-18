@@ -4,6 +4,9 @@
 ![Fiber](https://img.shields.io/badge/Framework-Fiber%20v2-forestgreen)
 ![Postgres](https://img.shields.io/badge/Database-Postgres%2016-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
+![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
+![Status](https://img.shields.io/badge/Project-RAG%20API%20Running-blue)
+
 
 
 A production-ready Go backend demonstrating Retrieval-Augmented Generation (RAG) using:
