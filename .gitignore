@@ -1,0 +1,40 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Go build
+bin/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Workspace
+go.work
+go.work.sum
+
+# Logs
+*.log
+logs/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Docker / Postgres data
+pgdata/
+pgdata_core/
+docker-data/
+**/pgdata/
+**/docker-data/
+**/volumes/
+
+# Coverage
+coverage.out
