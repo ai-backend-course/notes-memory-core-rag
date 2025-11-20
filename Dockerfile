@@ -34,5 +34,8 @@ COPY --from=builder /app/notes-memory-core-rag .
 # Expose API port
 EXPOSE 8080
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:8080/health || exit 1
+
 # Run the server
 CMD ["./notes-memory-core-rag"]
