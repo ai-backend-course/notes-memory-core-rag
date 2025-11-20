@@ -162,28 +162,6 @@ API available at:
 
 ---
 
-## 🧠 Architecture Overview (RAG System)
-
-This service extends Notes Memory Core with semantic search and Retrieval-Augmented Generation (RAG).  
-It uses pgvector for vector similarity search and integrates with two external AI microservices.
-
-```mermaid
-flowchart TD
-
-    A[Client / Query] --> B[HTTP API - Fiber]
-
-    B --> C[Handlers]
-    C --> D[Semantic Search Logic]
-
-    D --> E[(Postgres + pgvector)]
-    C --> F[Embedding Service (/embed)]
-
-    D --> G[Top-K Results]
-    G --> H[Summary Service (/summary)]
-    H --> A
-```
-
----
 
 ## 📡 Endpoints
 
