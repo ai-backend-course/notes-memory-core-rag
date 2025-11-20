@@ -1,40 +1,29 @@
-# Environment
+# -------------------------------------
+#  Environment Files (never commit)
+# -------------------------------------
 .env
 .env.*
 !.env.example
 
-# Go build
+# -------------------------------------
+#  Binary Outputs
+# -------------------------------------
+server
 bin/
-build/
+dist/
+tmp/
 *.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
 
-# Workspace
-go.work
-go.work.sum
-
-# Logs
-*.log
-logs/
-
-# IDE / OS
-.vscode/
-.idea/
-*.swp
+# -------------------------------------
+#  OS & Editor Junk
+# -------------------------------------
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
 
-# Docker / Postgres data
-pgdata/
-pgdata_core/
-docker-data/
-**/pgdata/
-**/docker-data/
-**/volumes/
-
-# Coverage
-coverage.out
+# -------------------------------------
+#  Dependency / Build Cache
+# -------------------------------------
+vendor/
