@@ -12,7 +12,7 @@ func RateLimit() fiber.Handler {
 	store := memory.New()
 
 	return limiter.New(limiter.Config{
-		Max:        5,
+		Max:        3,
 		Expiration: 1 * time.Minute,
 		Store:      store,
 	})
