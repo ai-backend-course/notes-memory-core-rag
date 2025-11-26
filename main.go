@@ -38,6 +38,7 @@ func main() {
 	// Middleware
 	app.Use(middleware.MetricsMiddleware)
 	app.Use(middleware.LoggerMiddleware)
+	app.Use(middleware.RateLimit)
 
 	// Base routes (health + notes CRUD)
 	app.Get("/health", handlers.HealthCheck)
