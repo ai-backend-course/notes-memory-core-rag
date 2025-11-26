@@ -31,7 +31,7 @@ func main() {
 
 	// CORS enabled
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "https://ai-backend-course.github.io",
+		AllowOrigins: "*",
 		AllowMethods: "GET,POST,OPTIONS",
 	}))
 
