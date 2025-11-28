@@ -211,7 +211,7 @@ Full RAG pipeline:
 
 ---
 
-## 🤖 Using Real OpenAI (Optional)
+## 🤖 Using Real OpenAI 
 
 Inside `.env`:
 
@@ -270,7 +270,7 @@ This repo is part of a four-project AI Backend Portfolio:
 2. **notes-memory-core-rag — flagship RAG system**  
 3. AI Summary Microservice  
 4. Embedding Worker Microservice  
-5. Portfolio Website (final week)
+5. Portfolio Website 
 
 This repository:
 
