@@ -7,8 +7,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     env_file:
       - .env
+    environment:
+      - REDIS_ADDR=redis:6379
     restart: unless-stopped
     networks:
       - notes_rag_network
@@ -29,6 +33,15 @@ services:
       retries: 5
     volumes:
       - pgdata_rag:/var/lib/postgresql/data
+    networks:
+      - notes_rag_network
+
+  redis:
+    image: redis:7
+    container_name: notes_rag_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
     networks:
       - notes_rag_network
 

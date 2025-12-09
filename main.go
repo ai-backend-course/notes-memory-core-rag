@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
@@ -25,6 +27,17 @@ func main() {
 
 	// Connect to Postgres and run migrations
 	database.Connect()
+
+	// Connect to Redis
+	ctx := context.Background()
+	redisClient := NewRedisClient()
+
+	pong, err := redisClient.Ping(ctx).Result()
+	if err != nil {
+		log.Fatal().Msgf("Redis not connected: %v", err)
+	}
+
+	fmt.Println("Redis ping:", pong)
 
 	// Create Fiber app
 	app := fiber.New()
