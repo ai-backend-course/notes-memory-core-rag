@@ -6,6 +6,9 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
 ![Status](https://img.shields.io/badge/Project-RAG%20API%20Running-blue)
+![CI](https://github.com/ai-backend-course/notes-memory-core-rag/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/ai-backend-course/notes-memory-core-rag/actions/workflows/fly-deploy.yml/badge.svg)
+
 
 
 
