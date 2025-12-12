@@ -37,14 +37,13 @@ func GenerateMockEmbedding(text string) []float32 {
 // ---------------------------
 
 // GenerateEmbedding calls OpenAI's embeddings API.
-func GenerateEmbedding(text string) ([]float32, error) {
+func GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		return nil, fmt.Errorf("missing OPENAI_API_KEY")
 	}
 
 	client := openai.NewClient(apiKey)
-	ctx := context.Background()
 
 	resp, err := client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Model: openai.SmallEmbedding3,
@@ -66,7 +65,7 @@ func GenerateEmbedding(text string) ([]float32, error) {
 // ---------------------------
 
 // GetEmbeddingAsVectorLiteral returns a PGVector literal string.
-func GetEmbeddingAsVectorLiteral(text string) (string, error) {
+func GetEmbeddingAsVectorLiteral(ctx context.Context, text string) (string, error) {
 	useMock := os.Getenv("USE_MOCK_EMBEDDINGS") == "true"
 
 	// Select mock or real embeddings
@@ -76,7 +75,7 @@ func GetEmbeddingAsVectorLiteral(text string) (string, error) {
 	if useMock {
 		vec = GenerateMockEmbedding(text)
 	} else {
-		vec, err = GenerateEmbedding(text)
+		vec, err = GenerateEmbedding(ctx, text)
 		if err != nil {
 			return "", err
 		}

@@ -81,7 +81,7 @@ func CreateNote(c *fiber.Ctx) error {
 	}
 
 	// Generate embedding (mock or real based on env)
-	vectorStr, err := ai.GetEmbeddingAsVectorLiteral(n.Content)
+	vectorStr, err := ai.GetEmbeddingAsVectorLiteral(ctx, n.Content)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).
 			JSON(fiber.Map{"error": "failed to generate embedding"})

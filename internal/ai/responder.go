@@ -1,13 +1,14 @@
 package ai
 
 import (
+	"context"
 	"os"
 	"strings"
 )
 
 // GenerateAIResponse decides whether to use mock or real AI responses.
 // Controlled by USE_MOCK_LLM=true/false.
-func GenerateAIResponse(query string, notes []string) (string, error) {
+func GenerateAIResponse(ctx context.Context, query string, notes []string) (string, error) {
 	useMock := os.Getenv("USE_MOCK_LLM") == "true"
 
 	if useMock {
@@ -15,7 +16,7 @@ func GenerateAIResponse(query string, notes []string) (string, error) {
 	}
 
 	// Otherwise call real OpenAI (defined in openai.go)
-	return GenerateRealAIResponse(query, notes)
+	return GenerateRealAIResponse(ctx, query, notes)
 }
 
 // ------------------------------

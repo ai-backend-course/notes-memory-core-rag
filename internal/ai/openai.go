@@ -10,14 +10,13 @@ import (
 
 // GenerateRealAIResponse sends the query + context notes to OpenAI
 // and returns a natural-language answer.
-func GenerateRealAIResponse(query string, notes []string) (string, error) {
+func GenerateRealAIResponse(ctx context.Context, query string, notes []string) (string, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		return "", fmt.Errorf("missing OPENAI_API_KEY")
 	}
 
 	client := openai.NewClient(apiKey)
-	ctx := context.Background()
 
 	// Build RAG-style context block
 	contextBlock := "Relevant notes:\n"

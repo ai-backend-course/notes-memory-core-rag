@@ -36,7 +36,7 @@ func SemanticSearch(c *fiber.Ctx) error {
 	defer cancel()
 
 	// Get embedding for query (mock or real)
-	queryVec, err := ai.GetEmbeddingAsVectorLiteral(req.Query)
+	queryVec, err := ai.GetEmbeddingAsVectorLiteral(ctx, req.Query)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to generate embedding",

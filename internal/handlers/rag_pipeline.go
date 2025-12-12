@@ -27,7 +27,7 @@ func RunRAGPipeline(parentCtx context.Context, query string) (*RAGResult, error)
 	defer cancel()
 
 	// 1. Embed text
-	queryVec, err := ai.GetEmbeddingAsVectorLiteral(query)
+	queryVec, err := ai.GetEmbeddingAsVectorLiteral(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func RunRAGPipeline(parentCtx context.Context, query string) (*RAGResult, error)
 	}
 
 	// 3. LLM answer generation
-	aiResponse, err := ai.GenerateAIResponse(query, contextTexts)
+	aiResponse, err := ai.GenerateAIResponse(ctx, query, contextTexts)
 	if err != nil {
 		return nil, err
 	}
