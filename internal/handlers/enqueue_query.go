@@ -39,6 +39,12 @@ func EnqueueQueryJob(c *fiber.Ctx) error {
 
 	// 4. Push into Redis queue
 	// Redis key: jobs:queue
+	if database.RedisClient == nil {
+		return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "background jobs are not available on this deployment",
+		})
+	}
+
 	if err := database.RedisClient.RPush(ctx, "jobs:queue", payloadBytes).Err(); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to enqueue job",
