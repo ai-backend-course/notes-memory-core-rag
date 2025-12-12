@@ -21,7 +21,11 @@ type RAGResult struct {
 	Results  []SearchResult `json:"results"`
 }
 
-func RunRAGPipeline(ctx context.Context, query string) (*RAGResult, error) {
+func RunRAGPipeline(parentCtx context.Context, query string) (*RAGResult, error) {
+	// Enforce an upper bound for the entire pipeline
+	ctx, cancel := context.WithTimeout(parentCtx, 15*time.Second)
+	defer cancel()
+
 	// 1. Embed text
 	queryVec, err := ai.GetEmbeddingAsVectorLiteral(query)
 	if err != nil {

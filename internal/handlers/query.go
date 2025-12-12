@@ -32,7 +32,8 @@ func SemanticSearch(c *fiber.Ctx) error {
 		})
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
 
 	// Get embedding for query (mock or real)
 	queryVec, err := ai.GetEmbeddingAsVectorLiteral(req.Query)
