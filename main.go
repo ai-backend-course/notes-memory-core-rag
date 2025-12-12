@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
@@ -29,15 +27,7 @@ func main() {
 	database.Connect()
 
 	// Connect to Redis
-	ctx := context.Background()
-	redisClient := NewRedisClient()
-
-	pong, err := redisClient.Ping(ctx).Result()
-	if err != nil {
-		log.Fatal().Msgf("Redis not connected: %v", err)
-	}
-
-	fmt.Println("Redis ping:", pong)
+	database.InitRedis()
 
 	// Create Fiber app
 	app := fiber.New()
@@ -61,6 +51,12 @@ func main() {
 	// RAG routes
 	app.Post("/query", handlers.Query)           // full RAG answer
 	app.Post("/search", handlers.SemanticSearch) // vector search only
+
+	// Asynchronous - Using Worker
+	app.Post("/jobs/query", handlers.EnqueueQueryJob)
+
+	// Retrieve Job Status by ID
+	app.Get("/jobs/:id", handlers.GetJob)
 
 	// Metrics endpoint
 	app.Get("/metrics", func(c *fiber.Ctx) error {

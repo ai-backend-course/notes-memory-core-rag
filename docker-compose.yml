@@ -2,8 +2,26 @@ services:
   api:
     build: .
     container_name: notes_rag_api
+    command: ["./api"]
     ports:
       - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - REDIS_ADDR=redis:6379
+    restart: unless-stopped
+    networks:
+      - notes_rag_network
+
+  worker:
+    build: .
+    container_name: notes_rag_worker
+    command: ["./worker"]
     depends_on:
       db:
         condition: service_healthy

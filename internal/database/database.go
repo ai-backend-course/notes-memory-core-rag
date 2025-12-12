@@ -75,5 +75,22 @@ func Connect() {
 		log.Fatal().Err(err).Msg("❌ Migration failed (note_embeddings table)")
 	}
 
+	// Jobs table (async processing)
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS jobs (
+			id UUID PRIMARY KEY,
+			type TEXT NOT NULL,
+			input JSONB NOT NULL,
+			status TEXT NOT NULL CHECK (status IN ('queued', 'processing', 'completed', 'failed')),
+			result JSONB,
+			error TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+	`)
+	if err != nil {
+		log.Fatal().Err(err).Msg("❌ Migration failed (jobs table)")
+	}
+
 	log.Info().Msg("✅ Database connected & migrations applied successfully")
 }

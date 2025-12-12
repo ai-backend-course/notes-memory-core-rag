@@ -1,41 +1,38 @@
-# ---------------------------------------------------
-# Build Stage
-# ---------------------------------------------------
+# ---------- BUILD STAGE ----------
 FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
-# Install Git (needed for go mod)
+# Install git (needed for go modules sometimes)
 RUN apk add --no-cache git
 
-# Cache dependencies
+# Copy go mod files first (cache optimization)
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
+# Copy the rest of the source
 COPY . .
 
-# Build binary
-RUN go build -o notes-memory-core-rag .
+# Build API binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o api ./main.go
 
-# ---------------------------------------------------
-# Run Stage
-# ---------------------------------------------------
+# Build WORKER binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o worker ./cmd/worker/main.go
+
+
+# ---------- RUNTIME STAGE ----------
 FROM alpine:latest
 
 WORKDIR /app
 
-# Add CA certificates so HTTPS calls (OpenAI) work
-RUN apk add --no-cache ca-certificates
-
-# Copy binary from builder stage
-COPY --from=builder /app/notes-memory-core-rag .
+# Copy binaries
+COPY --from=builder /app/api ./api
+COPY --from=builder /app/worker ./worker
 
 # Expose API port
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:8080/health || exit 1
-
-# Run the server
-CMD ["./notes-memory-core-rag"]
+# Default command (API)
+CMD ["./api"]

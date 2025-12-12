@@ -104,65 +104,12 @@ func Query(c *fiber.Ctx) error {
 		})
 	}
 
-	ctx := context.Background()
-
-	// Get embedding for query (mock or real)
-	queryVec, err := ai.GetEmbeddingAsVectorLiteral(req.Query)
+	result, err := RunRAGPipeline(context.Background(), req.Query)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to generate embedding",
+			"error": err.Error(),
 		})
 	}
 
-	// Vector similarity search
-	rows, err := database.Pool.Query(ctx, `
-		SELECT n.id, n.title, n.content, n.created_at,
-		       e.embedding <-> $1::vector AS distance
-		FROM notes n
-		JOIN note_embeddings e ON n.id = e.note_id
-		ORDER BY distance ASC
-		LIMIT 3;
-	`, queryVec)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).
-			JSON(fiber.Map{"error": err.Error()})
-	}
-	defer rows.Close()
-
-	type SearchResult struct {
-		ID        int       `json:"id"`
-		Title     string    `json:"title"`
-		Content   string    `json:"content"`
-		CreatedAt time.Time `json:"created_at"`
-		Distance  float64   `json:"distance"`
-	}
-
-	var results []SearchResult
-	var contextTexts []string
-
-	for rows.Next() {
-		var r SearchResult
-		if err := rows.Scan(
-			&r.ID, &r.Title, &r.Content, &r.CreatedAt, &r.Distance,
-		); err != nil {
-			return c.Status(http.StatusInternalServerError).
-				JSON(fiber.Map{"error": err.Error()})
-		}
-		results = append(results, r)
-		contextTexts = append(contextTexts, r.Content)
-	}
-
-	// Produce RAG response via AI (mock or real)
-	aiResponse, err := ai.GenerateAIResponse(req.Query, contextTexts)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": "AI response generation failed",
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"query":    req.Query,
-		"response": aiResponse,
-		"results":  results,
-	})
+	return c.JSON(result)
 }
