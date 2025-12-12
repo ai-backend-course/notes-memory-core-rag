@@ -29,6 +29,8 @@ This repository extends the base notes-memory-core backend into a full AI retrie
 - Run semantic search using pgvector
 - Produce AI answers grounded in your notes (RAG)
 
+The system supports **both synchronous and asynchronous execution modes**, with graceful degradation when optional infrastructure is unavailable.
+
 ---
 
 ## 🚀 Features
@@ -39,6 +41,8 @@ This repository extends the base notes-memory-core backend into a full AI retrie
 - In-memory metrics at /metrics
 - Automatic migrations
 - Dockerized Postgres 16
+- Rate limiting middleware to protect AI-backed endpoints
+
 
 ### RAG Features
 - pgvector semantic search
@@ -53,27 +57,43 @@ This repository extends the base notes-memory-core backend into a full AI retrie
 
 ```text
 notes-memory-core-rag/
-│
-├── main.go
-├── go.mod
-├── go.sum
+├── main.go                     # API entrypoint
 ├── Dockerfile
 ├── docker-compose.yml
+├── fly.toml
 ├── .env.example
+├── README.md
 │
-└── internal/
-    ├── database/
-    │   └── database.go
-    ├── handlers/
-    │   ├── notes.go
-    │   └── query.go
-    ├── ai/
-    │   ├── embeddings.go
-    │   ├── openai.go
-    │   └── responder.go
-    └── middleware/
-        ├── logger.go
-        └── metrics.go
+├── cmd/
+│   └── worker/
+│       └── main.go             # Background job worker (Redis-based)
+│
+├── internal/
+│   ├── ai/                     # AI abstraction layer
+│   │   ├── embeddings.go       # Mock + real embeddings (ctx-aware)
+│   │   ├── responder.go        # Mock + real LLM responses
+│   │   └── openai.go
+│   │
+│   ├── database/
+│   │   ├── database.go         # Postgres + migrations
+│   │   ├── redis.go            # Optional Redis initialization
+│   │   └── jobs.go             # Async job persistence
+│   │
+│   ├── handlers/
+│   │   ├── notes.go            # CRUD notes
+│   │   ├── query.go            # Synchronous RAG
+│   │   ├── rag_pipeline.go     # Shared RAG pipeline logic
+│   │   ├── enqueue_query.go    # Async job enqueue
+│   │   └── get_job.go          # Job status retrieval
+│   │
+│   └── middleware/
+│       ├── logger.go
+│       ├── metrics.go
+│       └── rate_limit.go
+│
+└── .github/workflows/
+    ├── ci.yml
+    └── fly-deploy.yml
 ```
 ---
 
@@ -137,6 +157,8 @@ Top-K Relevant Notes
              Final AI Answer
 ```
 
+The RAG pipeline is implemented once and reused by both synchronous HTTP handlers and the background worker.
+
 ---
 
 ## 🛠️ Running the Project
@@ -193,7 +215,7 @@ Creates:
 
 Semantic vector search.
 
-### POST /query
+### POST /query (Synchronous RAG)
 
     {
       "query": "summarize my notes"
@@ -203,6 +225,17 @@ Full RAG pipeline:
 - semantic search
 - top-k notes
 - AI answer (mock or real)
+- Context-aware execution with strict end-to-end timeouts
+- Intended for demos, CLI usage, and lightweight UI interactions
+
+This endpoint is always available, even when background infrastructure is not present.
+
+###  POST /jobs/query & GET /jobs/:id Asynchronous RAG Jobs (Optional / Local & Extended Deployments)
+- Enqueues RAG work into Redis
+- Processes jobs with a background worker with retries and backoff
+- Designed for long-running or high-latency AI tasks
+
+If Redis is unavailable (e.g., API-only deployments), these endpoints return a clear `503 Service Unavailable` response instead of failing.
 
 ### GET /metrics
 
@@ -242,11 +275,42 @@ This switches pipeline to:
       -H "Content-Type: application/json" \
       -d '{"query":"demo"}'
 
-### RAG
+### RAG (sync)
 
     curl -X POST http://localhost:8081/query \
       -H "Content-Type: application/json" \
       -d '{"query":"summarize my notes"}'
+
+### RAG (async) & Retrieve Status by ID
+
+    curl -X POST http://localhost:8081/jobs/query \
+      -H "Content-Type: application/json" \
+      -d '{"query":"summarize my notes"}'
+
+    curl http://localhost:8081/jobs/:id
+
+---
+
+## Production Deployment Behavior (Fly.io)
+
+This service is deployed to Fly.io in an **API-only mode**:
+
+- The synchronous RAG endpoint (`/query`) is always available
+- Background job endpoints (`/jobs/*`) are enabled only when Redis is present
+- Redis is treated as an optional dependency
+- When Redis is unavailable, async endpoints return a clear `503 Service Unavailable`
+
+This design demonstrates **graceful degradation** and allows the core API to remain stable even when optional infrastructure is absent.
+
+---
+
+## Reliability & Safety Guarantees
+
+- All AI calls propagate `context.Context`
+- Strict timeouts are enforced across the full RAG pipeline
+- Long-running or blocked AI calls cannot stall the API
+- Async jobs include retries with exponential backoff
+- Optional infrastructure failures never crash the service
 
 ---
 
@@ -282,3 +346,5 @@ This repository:
 - Uses enterprise Go patterns
 - Provides semantic search + RAG
 - Is ready for employer review
+- CI/CD is handled via GitHub Actions, automatically building and deploying to Fly.io with zero-downtime machine replacement.
+
