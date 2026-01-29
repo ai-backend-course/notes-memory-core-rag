@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -139,14 +140,16 @@ func ClaimJobForProcessing(ctx context.Context, id string) (bool, error) {
 // CheckRecentDuplicateJob looks for duplicate jobs within a time window
 func CheckRecentDuplicateJob(ctx context.Context, contentHash string, windowMinutes int) (*string, error) {
 	var existingJobID string
-	err := Pool.QueryRow(ctx, `
+	query := fmt.Sprintf(`
 		SELECT id FROM jobs
 		WHERE content_hash = $1
-		AND created_at > NOW() - INTERVAL '$2 minutes'
+		AND created_at > NOW() - INTERVAL '%d minutes'
 		AND status IN ('queued', 'processing', 'completed')
 		ORDER BY created_at DESC
 		LIMIT 1
-	`, contentHash, windowMinutes).Scan(&existingJobID)
+	`, windowMinutes)
+	
+	err := Pool.QueryRow(ctx, query, contentHash).Scan(&existingJobID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil // No recent duplicate
