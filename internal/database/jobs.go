@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 
 	"github.com/google/uuid"
@@ -17,8 +18,8 @@ type Job struct {
 	Error  *string          `json:"error,omitempty"`
 }
 
-// Create new job in DB
-func CreateJob(ctx context.Context, jobType string, input interface{}) (string, error) {
+// Create new job in DB - all jobs must have a content hash
+func CreateJob(ctx context.Context, jobType string, input interface{}, contentHash string) (string, error) {
 	id := uuid.New().String()
 
 	// Convert input payload to JSON
@@ -27,11 +28,11 @@ func CreateJob(ctx context.Context, jobType string, input interface{}) (string, 
 		return "", err
 	}
 
-	// Insert into database
+	// Insert into database with content_hash
 	_, err = Pool.Exec(ctx, `
-		INSERT INTO jobs (id, type, input, status)
-		VALUES ($1, $2, $3, 'queued')
-	`, id, jobType, inputBytes)
+		INSERT INTO jobs (id, type, input, status, content_hash, retry_count)
+		VALUES ($1, $2, $3, 'queued', $4, 0)
+	`, id, jobType, inputBytes, contentHash)
 
 	if err != nil {
 		return "", err
@@ -98,4 +99,57 @@ func GetJobByID(ctx context.Context, id string) (*Job, error) {
 	}
 
 	return &job, nil
+}
+
+// GetJobStatus returns just the status of a job by ID
+func GetJobStatus(ctx context.Context, id string) (string, error) {
+	var status string
+	err := Pool.QueryRow(ctx, `
+		SELECT status 
+		FROM jobs 
+		WHERE id = $1
+	`, id).Scan(&status)
+
+	if err != nil {
+		return "", err
+	}
+
+	return status, nil
+}
+
+// ClaimJobForProcessing atomically updates job status from 'queued' to 'processing'
+// Uses PostgreSQL's row-level locking to ensure only one worker can claim each job
+// Returns true if successfully claimed, false if already claimed by another worker
+func ClaimJobForProcessing(ctx context.Context, id string) (bool, error) {
+	result, err := Pool.Exec(ctx, `
+		UPDATE jobs 
+		SET status = 'processing', updated_at = NOW() 
+		WHERE id = $1 AND status = 'queued'
+	`, id)
+
+	if err != nil {
+		return false, err
+	}
+
+	rowsAffected := result.RowsAffected()
+
+	return rowsAffected == 1, nil
+}
+
+// CheckRecentDuplicateJob looks for duplicate jobs within a time window
+func CheckRecentDuplicateJob(ctx context.Context, contentHash string, windowMinutes int) (*string, error) {
+	var existingJobID string
+	err := Pool.QueryRow(ctx, `
+		SELECT id FROM jobs
+		WHERE content_hash = $1
+		AND created_at > NOW() - INTERVAL '$2 minutes'
+		AND status IN ('queued', 'processing', 'completed')
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, contentHash, windowMinutes).Scan(&existingJobID)
+
+	if err == sql.ErrNoRows {
+		return nil, nil // No recent duplicate
+	}
+	return &existingJobID, err
 }

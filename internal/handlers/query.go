@@ -14,7 +14,8 @@ import (
 
 // QueryRequest represents a semantic search or RAG request.
 type QueryRequest struct {
-	Query string `json:"query"`
+	Query          string  `json:"query"`
+	IdempotencyKey *string `json:"idempotency_key,omitempty"` // Optional client key
 }
 
 // SemanticSearch performs vector similarity search using pgvector.

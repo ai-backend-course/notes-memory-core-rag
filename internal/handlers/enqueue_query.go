@@ -2,17 +2,32 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"notes-memory-core-rag/internal/database"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
 
+func generateJobContentHash(req QueryRequest) string {
+	normalized := struct {
+		Query string `json:"query"`
+	}{
+		Query: strings.TrimSpace(strings.ToLower(req.Query)),
+	}
+
+	data, _ := json.Marshal(normalized)
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString((hash[:]))
+}
+
 func EnqueueQueryJob(c *fiber.Ctx) error {
 	ctx := context.Background()
 
-	// 1. Parse request body
+	// Parse request body
 	var req QueryRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
@@ -20,8 +35,32 @@ func EnqueueQueryJob(c *fiber.Ctx) error {
 		})
 	}
 
-	// 2. Create job in Postgres with status 'queued'
-	jobID, err := database.CreateJob(ctx, "query", req)
+	//  Generate content hash
+	var finalHash string
+	// Use client-provided key
+	if req.IdempotencyKey != nil {
+		finalHash = "client:" + *req.IdempotencyKey
+	} else {
+		// Use content-based hash
+		finalHash = "content:" + generateJobContentHash(req)
+	}
+
+	// Check for recent duplicate (last 5 minutes)
+	existingJobID, err := database.CheckRecentDuplicateJob(ctx, finalHash, 5)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "duplicate check failed"})
+	}
+
+	if existingJobID != nil {
+		// Return existing job instead of creating new one
+		return c.JSON(fiber.Map{
+			"job_id":  *existingJobID,
+			"status":  "existing_job_found",
+			"message": "Identical query was recently submitted",
+		})
+	}
+
+	jobID, err := database.CreateJob(ctx, "query", req, finalHash)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create job record",

@@ -70,6 +70,7 @@ func Connect() {
 			embedding vector(1536),
 			created_at TIMESTAMP DEFAULT NOW()
 		);
+		CREATE INDEX IF NOT EXISTS idx_embeddings_content_hash ON note_embeddings(content_hash);
 	`)
 	if err != nil {
 		log.Fatal().Err(err).Msg("❌ Migration failed (note_embeddings table)")
@@ -90,6 +91,30 @@ func Connect() {
 	`)
 	if err != nil {
 		log.Fatal().Err(err).Msg("❌ Migration failed (jobs table)")
+	}
+
+	// Add new columns for idempotency (safe to run multiple times)
+	_, err = pool.Exec(ctx, `
+		ALTER TABLE jobs 
+		ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0;
+	`)
+	if err != nil {
+		log.Fatal().Err(err).Msg("❌ Migration failed (retry_count column)")
+	}
+
+	_, err = pool.Exec(ctx, `
+		ALTER TABLE jobs 
+		ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64);
+	`)
+	if err != nil {
+		log.Fatal().Err(err).Msg("❌ Migration failed (content_hash column)")
+	}
+
+	_, err = pool.Exec(ctx, `
+		CREATE INDEX IF NOT EXISTS idx_jobs_content_hash ON jobs(content_hash);
+	`)
+	if err != nil {
+		log.Fatal().Err(err).Msg("❌ Migration failed (content_hash index)")
 	}
 
 	log.Info().Msg("✅ Database connected & migrations applied successfully")

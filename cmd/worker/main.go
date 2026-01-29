@@ -54,12 +54,6 @@ func main() {
 
 		zlog.Info().Str("job_id", payload.ID).Msg("📥 Job received")
 
-		// Mark job as processing
-		if err := database.UpdateJobStatus(ctx, payload.ID, "processing"); err != nil {
-			zlog.Error().Err(err).Msg("❌ Failed to update status")
-			continue
-		}
-
 		// PROCESS THE JOB BASED ON TYPE
 		switch payload.Type {
 		case "query":
@@ -72,6 +66,18 @@ func main() {
 
 func processQueryJob(ctx context.Context, job JobPayload) {
 	zlog.Info().Str("job_id", job.ID).Msg("🤖 Processing query job")
+
+	// Atomically claim the job (prevents double processing)
+	success, err := database.ClaimJobForProcessing(ctx, job.ID)
+	if err != nil {
+		zlog.Error().Err(err).Str("job_id", job.ID).Msg("Failed to claim job")
+		return
+	}
+
+	if !success {
+		zlog.Info().Str("job_id", job.ID).Msg("Job already being processed by another worker")
+		return
+	}
 
 	// Convert raw input JSON into handler request struct
 	var req handlers.QueryRequest
