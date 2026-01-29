@@ -9,16 +9,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Pool is the shared PostgreSQL connection pool.
 var Pool *pgxpool.Pool
 
 // Connect initializes the database connection pool and applies
 // migrations for both the notes and embedding tables.
 func Connect() {
+	log.Info().Msg("🔌 Starting database connection...")
+
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		log.Fatal().Msg("❌ DATABASE_URL is not set")
 	}
+
+	log.Info().Msg("🔌 Creating database connection pool...")
 
 	// Context with timeout to avoid hanging connections
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -30,19 +33,29 @@ func Connect() {
 		log.Fatal().Err(err).Msg("❌ Failed to create database connection pool")
 	}
 
+	log.Info().Msg("🔌 Testing database connection...")
+
 	// Verify connection
 	if err := pool.Ping(ctx); err != nil {
 		log.Fatal().Err(err).Msg("❌ Database ping failed")
 	}
 
+	log.Info().Msg("✅ Database connection established")
+
 	Pool = pool
+
+	// Run migrations with separate, longer context
+	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer migrationCancel()
 
 	// ------------------------------
 	// MIGRATIONS
 	// ------------------------------
+	log.Info().Msg("🔄 Running database migrations...")
 
+	log.Info().Msg("🔄 Creating notes table...")
 	// Notes table
-	_, err = pool.Exec(ctx, `
+	_, err = pool.Exec(migrationCtx, `
 		CREATE TABLE IF NOT EXISTS notes (
 			id SERIAL PRIMARY KEY,
 			title TEXT NOT NULL,
@@ -55,7 +68,7 @@ func Connect() {
 	}
 
 	// Enable pgvector extension
-	_, err = pool.Exec(ctx, `
+	_, err = pool.Exec(migrationCtx, `
 		CREATE EXTENSION IF NOT EXISTS vector;
 	`)
 	if err != nil {
@@ -63,7 +76,7 @@ func Connect() {
 	}
 
 	// Embeddings table (1536-dim vector)
-	_, err = pool.Exec(ctx, `
+	_, err = pool.Exec(migrationCtx, `
 		CREATE TABLE IF NOT EXISTS note_embeddings (
 			id SERIAL PRIMARY KEY,
 			note_id INTEGER REFERENCES notes(id) ON DELETE CASCADE,
@@ -77,7 +90,7 @@ func Connect() {
 	}
 
 	// Jobs table (async processing)
-	_, err = pool.Exec(ctx, `
+	_, err = pool.Exec(migrationCtx, `
 		CREATE TABLE IF NOT EXISTS jobs (
 			id UUID PRIMARY KEY,
 			type TEXT NOT NULL,
@@ -93,8 +106,9 @@ func Connect() {
 		log.Fatal().Err(err).Msg("❌ Migration failed (jobs table)")
 	}
 
+	log.Info().Msg("🔄 Adding idempotency columns...")
 	// Add new columns for idempotency (safe to run multiple times)
-	_, err = pool.Exec(ctx, `
+	_, err = pool.Exec(migrationCtx, `
 		ALTER TABLE jobs 
 		ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0;
 	`)
@@ -102,7 +116,7 @@ func Connect() {
 		log.Fatal().Err(err).Msg("❌ Migration failed (retry_count column)")
 	}
 
-	_, err = pool.Exec(ctx, `
+	_, err = pool.Exec(migrationCtx, `
 		ALTER TABLE jobs 
 		ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64);
 	`)
@@ -110,7 +124,7 @@ func Connect() {
 		log.Fatal().Err(err).Msg("❌ Migration failed (content_hash column)")
 	}
 
-	_, err = pool.Exec(ctx, `
+	_, err = pool.Exec(migrationCtx, `
 		CREATE INDEX IF NOT EXISTS idx_jobs_content_hash ON jobs(content_hash);
 	`)
 	if err != nil {

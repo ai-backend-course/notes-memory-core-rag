@@ -148,7 +148,7 @@ func CheckRecentDuplicateJob(ctx context.Context, contentHash string, windowMinu
 		ORDER BY created_at DESC
 		LIMIT 1
 	`, windowMinutes)
-	
+
 	err := Pool.QueryRow(ctx, query, contentHash).Scan(&existingJobID)
 
 	if err == sql.ErrNoRows {
