@@ -83,7 +83,6 @@ func Connect() {
 			embedding vector(1536),
 			created_at TIMESTAMP DEFAULT NOW()
 		);
-		CREATE INDEX IF NOT EXISTS idx_embeddings_content_hash ON note_embeddings(content_hash);
 	`)
 	if err != nil {
 		log.Fatal().Err(err).Msg("❌ Migration failed (note_embeddings table)")
