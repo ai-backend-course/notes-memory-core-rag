@@ -117,10 +117,19 @@ func Connect() {
 
 	_, err = pool.Exec(migrationCtx, `
 		ALTER TABLE jobs 
-		ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64);
+		ADD COLUMN IF NOT EXISTS content_hash VARCHAR(128);
 	`)
 	if err != nil {
 		log.Fatal().Err(err).Msg("❌ Migration failed (content_hash column)")
+	}
+
+	log.Info().Msg("🔄 Updating content_hash column size...")
+	_, err = pool.Exec(migrationCtx, `
+		ALTER TABLE jobs 
+		ALTER COLUMN content_hash TYPE VARCHAR(128);
+	`)
+	if err != nil {
+		log.Fatal().Err(err).Msg("❌ Migration failed (content_hash column resize)")
 	}
 
 	_, err = pool.Exec(migrationCtx, `

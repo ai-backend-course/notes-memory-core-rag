@@ -126,7 +126,7 @@ func processQueryJob(ctx context.Context, job JobPayload) {
 			Msg("job execution failed, retrying")
 
 		// Exponential backoff: 1s, 2s, 3s
-		time.Sleep(time.Duration(attempt) * time.Second)
+		time.Sleep(time.Duration(1<<uint(attempt-1)) * time.Second)
 	}
 
 	database.UpdateJobError(ctx, job.ID, lastErr.Error())

@@ -2,12 +2,12 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // Job model
@@ -168,7 +168,7 @@ func CheckRecentDuplicateJob(ctx context.Context, contentHash string, windowMinu
 
 	err := Pool.QueryRow(ctx, query, contentHash).Scan(&existingJobID)
 
-	if err == sql.ErrNoRows {
+	if err == pgx.ErrNoRows {
 		return nil, nil // No recent duplicate
 	}
 	return &existingJobID, err

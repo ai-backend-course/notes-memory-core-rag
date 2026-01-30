@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog/log"
 )
 
 func generateJobContentHash(req QueryRequest) string {
@@ -62,6 +63,7 @@ func EnqueueQueryJob(c *fiber.Ctx) error {
 
 	jobID, err := database.CreateJob(ctx, "query", req, finalHash)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to create job record in database")
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create job record",
 		})
