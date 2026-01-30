@@ -5,18 +5,21 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 // Job model
 type Job struct {
-	ID     string           `json:"id"`
-	Type   string           `json:"type"`
-	Input  json.RawMessage  `json:"input"`
-	Status string           `json:"status"`
-	Result *json.RawMessage `json:"result,omitempty"`
-	Error  *string          `json:"error,omitempty"`
+	ID                string           `json:"id"`
+	Type              string           `json:"type"`
+	Input             json.RawMessage  `json:"input"`
+	Status            string           `json:"status"`
+	Result            *json.RawMessage `json:"result,omitempty"`
+	Error             *string          `json:"error,omitempty"`
+	VisibilityTimeout *time.Time       `json:"visibility_timeout,omitempty"`
+	WorkerID          *string          `json:"worker_id,omitempty"`
 }
 
 // Create new job in DB - all jobs must have a content hash
@@ -59,6 +62,8 @@ func UpdateJobResult(ctx context.Context, id string, result interface{}) error {
 		UPDATE jobs
 		SET status = 'completed',
 			result = $1,
+			visibility_timeout = NULL,
+			worker_id = NULL,
 			updated_at = NOW()
 		WHERE id = $2
 	`, resultBytes, id)
@@ -71,6 +76,8 @@ func UpdateJobError(ctx context.Context, id string, errMsg string) error {
 		UPDATE jobs
 		SET status = 'failed',
 			error = $1,
+			visibility_timeout = NULL,
+			worker_id = NULL,
 			updated_at = NOW()
 		WHERE id = $2 
 	`, errMsg, id)
@@ -80,7 +87,7 @@ func UpdateJobError(ctx context.Context, id string, errMsg string) error {
 // Fetch job by ID
 func GetJobByID(ctx context.Context, id string) (*Job, error) {
 	row := Pool.QueryRow(ctx, `
-		SELECT id, type, input, status, result, error
+		SELECT id, type, input, status, result, error, visibility_timeout, worker_id
 		FROM jobs
 		WHERE id = $1
 	`, id)
@@ -93,6 +100,8 @@ func GetJobByID(ctx context.Context, id string) (*Job, error) {
 		&job.Status,
 		&job.Result,
 		&job.Error,
+		&job.VisibilityTimeout,
+		&job.WorkerID,
 	)
 
 	if err != nil {
@@ -119,21 +128,29 @@ func GetJobStatus(ctx context.Context, id string) (string, error) {
 }
 
 // ClaimJobForProcessing atomically updates job status from 'queued' to 'processing'
-// Uses PostgreSQL's row-level locking to ensure only one worker can claim each job
+// with visibility timeout protection. Uses PostgreSQL's row-level locking to ensure
+// only one worker can claim each job. Sets a visibility timeout to allow reclaim if worker crashes.
 // Returns true if successfully claimed, false if already claimed by another worker
-func ClaimJobForProcessing(ctx context.Context, id string) (bool, error) {
+func ClaimJobForProcessing(ctx context.Context, id string, workerID string, timeoutMinutes int) (bool, error) {
+	visibilityTimeout := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
+
 	result, err := Pool.Exec(ctx, `
 		UPDATE jobs 
-		SET status = 'processing', updated_at = NOW() 
-		WHERE id = $1 AND status = 'queued'
-	`, id)
+		SET status = 'processing', 
+		    updated_at = NOW(),
+		    visibility_timeout = $2,
+		    worker_id = $3
+		WHERE id = $1 AND (
+		    status = 'queued' OR 
+		    (status = 'processing' AND visibility_timeout < NOW())
+		)
+	`, id, visibilityTimeout, workerID)
 
 	if err != nil {
 		return false, err
 	}
 
 	rowsAffected := result.RowsAffected()
-
 	return rowsAffected == 1, nil
 }
 
@@ -155,4 +172,50 @@ func CheckRecentDuplicateJob(ctx context.Context, contentHash string, windowMinu
 		return nil, nil // No recent duplicate
 	}
 	return &existingJobID, err
+}
+
+// ReclaimTimedOutJobs finds jobs that have exceeded their visibility timeout and resets them to 'queued'
+// This allows other workers to pick up jobs that were abandoned due to worker crashes
+func ReclaimTimedOutJobs(ctx context.Context) (int, error) {
+	result, err := Pool.Exec(ctx, `
+		UPDATE jobs
+		SET status = 'queued',
+		    visibility_timeout = NULL,
+		    worker_id = NULL,
+		    updated_at = NOW()
+		WHERE status = 'processing' 
+		AND visibility_timeout IS NOT NULL 
+		AND visibility_timeout < NOW()
+	`)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return int(result.RowsAffected()), nil
+}
+
+// ExtendVisibilityTimeout allows a worker to extend the visibility timeout for a job it's processing
+// This prevents the job from being reclaimed while the worker is still actively processing it
+func ExtendVisibilityTimeout(ctx context.Context, jobID string, workerID string, additionalMinutes int) error {
+	newTimeout := time.Now().Add(time.Duration(additionalMinutes) * time.Minute)
+
+	result, err := Pool.Exec(ctx, `
+		UPDATE jobs
+		SET visibility_timeout = $1,
+		    updated_at = NOW()
+		WHERE id = $2 
+		AND worker_id = $3 
+		AND status = 'processing'
+	`, newTimeout, jobID, workerID)
+
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("job not found or not owned by worker %s", workerID)
+	}
+
+	return nil
 }

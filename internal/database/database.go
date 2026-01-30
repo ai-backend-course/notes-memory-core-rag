@@ -130,5 +130,24 @@ func Connect() {
 		log.Fatal().Err(err).Msg("❌ Migration failed (content_hash index)")
 	}
 
+	log.Info().Msg("🔄 Adding visibility timeout columns...")
+	// Add columns for visibility timeout mechanism
+	_, err = pool.Exec(migrationCtx, `
+		ALTER TABLE jobs 
+		ADD COLUMN IF NOT EXISTS visibility_timeout TIMESTAMPTZ,
+		ADD COLUMN IF NOT EXISTS worker_id TEXT;
+	`)
+	if err != nil {
+		log.Fatal().Err(err).Msg("❌ Migration failed (visibility timeout columns)")
+	}
+
+	_, err = pool.Exec(migrationCtx, `
+		CREATE INDEX IF NOT EXISTS idx_jobs_visibility_timeout ON jobs(visibility_timeout) 
+		WHERE visibility_timeout IS NOT NULL;
+	`)
+	if err != nil {
+		log.Fatal().Err(err).Msg("❌ Migration failed (visibility timeout index)")
+	}
+
 	log.Info().Msg("✅ Database connected & migrations applied successfully")
 }

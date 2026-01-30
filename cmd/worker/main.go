@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
 )
@@ -19,11 +20,17 @@ type JobPayload struct {
 }
 
 const (
-	maxRetries = 3
+	maxRetries               = 3
+	visibilityTimeoutMinutes = 3
 )
 
+var workerID string
+
+func init() {
+	workerID = uuid.New().String()[:8]
+}
+
 func main() {
-	// Pretty logs
 	zlog.Logger = zlog.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	ctx := context.Background()
@@ -32,7 +39,10 @@ func main() {
 	database.Connect()
 	database.InitRedis()
 
-	zlog.Info().Msg("⚙️ Worker Started - listening for jobs...")
+	zlog.Info().Str("worker_id", workerID).Msg("⚙️ Worker Started - listening for jobs...")
+
+	// Start background task to reclaim timed-out jobs
+	go reclaimJobsTask(ctx)
 
 	for {
 		// BLPOP blocks until a job arrives
@@ -52,9 +62,9 @@ func main() {
 			continue
 		}
 
-		zlog.Info().Str("job_id", payload.ID).Msg("📥 Job received")
+		zlog.Info().Str("job_id", payload.ID).Str("worker_id", workerID).Msg("📥 Job received")
 
-		// PROCESS THE JOB BASED ON TYPE
+		// Process the job based on type
 		switch payload.Type {
 		case "query":
 			processQueryJob(ctx, payload)
@@ -65,17 +75,17 @@ func main() {
 }
 
 func processQueryJob(ctx context.Context, job JobPayload) {
-	zlog.Info().Str("job_id", job.ID).Msg("🤖 Processing query job")
+	zlog.Info().Str("job_id", job.ID).Str("worker_id", workerID).Msg("🤖 Processing query job")
 
-	// Atomically claim the job (prevents double processing)
-	success, err := database.ClaimJobForProcessing(ctx, job.ID)
+	// Atomically claim the job with visibility timeout (prevents double processing)
+	success, err := database.ClaimJobForProcessing(ctx, job.ID, workerID, visibilityTimeoutMinutes)
 	if err != nil {
 		zlog.Error().Err(err).Str("job_id", job.ID).Msg("Failed to claim job")
 		return
 	}
 
 	if !success {
-		zlog.Info().Str("job_id", job.ID).Msg("Job already being processed by another worker")
+		zlog.Info().Str("job_id", job.ID).Msg("Job already being processed by another worker or timed out")
 		return
 	}
 
@@ -90,11 +100,19 @@ func processQueryJob(ctx context.Context, job JobPayload) {
 	var lastErr error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// For long-running jobs, extend the visibility timeout
+		if attempt > 1 {
+			if err := database.ExtendVisibilityTimeout(ctx, job.ID, workerID, visibilityTimeoutMinutes); err != nil {
+				zlog.Warn().Err(err).Str("job_id", job.ID).Msg("Failed to extend visibility timeout")
+			}
+		}
+
 		ragResult, err := handlers.RunRAGPipeline(ctx, req.Query)
 		if err == nil {
 			database.UpdateJobResult(ctx, job.ID, ragResult)
 			zlog.Info().
 				Str("job_id", job.ID).
+				Str("worker_id", workerID).
 				Msg("✅ Job completed successfully")
 			return
 		}
@@ -104,6 +122,7 @@ func processQueryJob(ctx context.Context, job JobPayload) {
 		zlog.Warn().
 			Int("attempt", attempt).
 			Err(err).
+			Str("worker_id", workerID).
 			Msg("job execution failed, retrying")
 
 		// Exponential backoff: 1s, 2s, 3s
@@ -114,6 +133,34 @@ func processQueryJob(ctx context.Context, job JobPayload) {
 
 	zlog.Error().
 		Str("job_id", job.ID).
+		Str("worker_id", workerID).
 		Msg("❌ Job failed after retries")
+}
 
+// reclaimJobsTask runs in background to reclaim jobs that have timed out
+func reclaimJobsTask(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			count, err := database.ReclaimTimedOutJobs(ctx)
+			if err != nil {
+				zlog.Error().Err(err).Msg("Failed to reclaim timed-out jobs")
+				continue
+			}
+
+			if count > 0 {
+				zlog.Info().
+					Int("reclaimed_jobs", count).
+					Str("worker_id", workerID).
+					Msg("🔄 Reclaimed timed-out jobs")
+			}
+
+		case <-ctx.Done():
+			zlog.Info().Msg("Stopping job reclaim task")
+			return
+		}
+	}
 }
