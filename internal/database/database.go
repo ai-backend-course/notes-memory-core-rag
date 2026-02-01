@@ -11,8 +11,6 @@ import (
 
 var Pool *pgxpool.Pool
 
-// Connect initializes the database connection pool and applies
-// migrations for both the notes and embedding tables.
 func Connect() {
 	log.Info().Msg("🔌 Starting database connection...")
 
@@ -27,7 +25,6 @@ func Connect() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Create connection pool
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		log.Fatal().Err(err).Msg("❌ Failed to create database connection pool")
@@ -35,7 +32,6 @@ func Connect() {
 
 	log.Info().Msg("🔌 Testing database connection...")
 
-	// Verify connection
 	if err := pool.Ping(ctx); err != nil {
 		log.Fatal().Err(err).Msg("❌ Database ping failed")
 	}
@@ -54,7 +50,6 @@ func Connect() {
 	log.Info().Msg("🔄 Running database migrations...")
 
 	log.Info().Msg("🔄 Creating notes table...")
-	// Notes table
 	_, err = pool.Exec(migrationCtx, `
 		CREATE TABLE IF NOT EXISTS notes (
 			id SERIAL PRIMARY KEY,
@@ -75,7 +70,6 @@ func Connect() {
 		log.Fatal().Err(err).Msg("❌ Failed to enable pgvector extension")
 	}
 
-	// Embeddings table (1536-dim vector)
 	_, err = pool.Exec(migrationCtx, `
 		CREATE TABLE IF NOT EXISTS note_embeddings (
 			id SERIAL PRIMARY KEY,

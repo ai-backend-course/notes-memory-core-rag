@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -17,6 +18,10 @@ func GenerateRealAIResponse(ctx context.Context, query string, notes []string) (
 	}
 
 	client := openai.NewClient(apiKey)
+
+	// Create context with timeout for OpenAI API call
+	timeoutCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 
 	// Build RAG-style context block
 	contextBlock := "Relevant notes:\n"
@@ -36,7 +41,7 @@ User Query:
 Your Answer:
 `, query, contextBlock)
 
-	resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+	resp, err := client.CreateChatCompletion(timeoutCtx, openai.ChatCompletionRequest{
 		Model: openai.GPT4oMini,
 		Messages: []openai.ChatCompletionMessage{
 			{

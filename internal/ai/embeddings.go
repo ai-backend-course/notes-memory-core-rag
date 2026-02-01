@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -43,9 +44,13 @@ func GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
 		return nil, fmt.Errorf("missing OPENAI_API_KEY")
 	}
 
+	// Create context with timeout for OpenAI API call
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	client := openai.NewClient(apiKey)
 
-	resp, err := client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
+	resp, err := client.CreateEmbeddings(timeoutCtx, openai.EmbeddingRequest{
 		Model: openai.SmallEmbedding3,
 		Input: []string{text},
 	})

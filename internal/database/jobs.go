@@ -84,6 +84,17 @@ func UpdateJobError(ctx context.Context, id string, errMsg string) error {
 	return err
 }
 
+// Increment retry count for a job
+func IncrementRetryCount(ctx context.Context, jobID string) error {
+	_, err := Pool.Exec(ctx, `
+		UPDATE jobs
+		SET retry_count = retry_count + 1,
+		    updated_at = NOW()
+		WHERE id = $1
+	`, jobID)
+	return err
+}
+
 // Fetch job by ID
 func GetJobByID(ctx context.Context, id string) (*Job, error) {
 	row := Pool.QueryRow(ctx, `

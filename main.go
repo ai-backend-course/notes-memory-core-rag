@@ -15,7 +15,6 @@ import (
 )
 
 func main() {
-	// Pretty logger output during development
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	// Load environment variables
@@ -49,8 +48,8 @@ func main() {
 	app.Post("/notes", handlers.CreateNote)
 
 	// RAG routes
-	app.Post("/query", handlers.Query)           // full RAG answer
-	app.Post("/search", handlers.SemanticSearch) // vector search only
+	app.Post("/query", handlers.Query)
+	app.Post("/search", handlers.SemanticSearch)
 
 	// Asynchronous - Using Worker
 	app.Post("/jobs/query", handlers.EnqueueQueryJob)
