@@ -124,14 +124,22 @@ func processQueryJob(ctx context.Context, job JobPayload) {
 			zlog.Warn().Err(incrementErr).Str("job_id", job.ID).Msg("Failed to increment retry count")
 		}
 
-		zlog.Warn().
-			Int("attempt", attempt).
-			Err(err).
-			Str("worker_id", workerID).
-			Msg("job execution failed, retrying")
+		if attempt < maxRetries {
+			zlog.Warn().
+				Int("attempt", attempt).
+				Err(err).
+				Str("worker_id", workerID).
+				Msg("job execution failed, retrying")
 
-		// Exponential backoff: immediate , 2s, 4s
-		time.Sleep(time.Duration(1<<uint(attempt-1)) * time.Second)
+			// Exponential backoff: immediate , 2s, 4s
+			time.Sleep(time.Duration(1<<uint(attempt-1)) * time.Second)
+		} else {
+			zlog.Warn().
+				Int("attempt", attempt).
+				Err(err).
+				Str("worker_id", workerID).
+				Msg("job execution failed, max retries reached")
+		}
 	}
 
 	database.UpdateJobError(ctx, job.ID, lastErr.Error())
